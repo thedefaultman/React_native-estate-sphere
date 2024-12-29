@@ -5,9 +5,8 @@ import images from '@/constants/images'
 import icons from '@/constants/icons'
 import * as WebBrowser from 'expo-web-browser'
 import { Redirect } from 'expo-router'
-import { useAuth  } from '@clerk/clerk-expo'
-import { Login } from '@/lib/auth'
-
+import { useAuth, useOAuth  } from '@clerk/clerk-expo'
+import * as Linking from 'expo-linking'
 // browser warm up 
 export const useWarmUpBrowser = () => {
   useEffect(() => {
@@ -27,6 +26,25 @@ export default function Index() {
     return <Redirect href={'/home'} />
   }
 
+  const { startOAuthFlow } = useOAuth({ strategy: 'oauth_google' })
+ const Login = async () => {
+
+    try {
+      const { createdSessionId, signIn, signUp, setActive } = await startOAuthFlow({
+        redirectUrl: Linking.createURL('/', { scheme: 'estate-sphere' }),
+      })
+      if (createdSessionId) {
+        setActive!({ session: createdSessionId })
+        return true
+      } else {
+        throw new Error('failed to open session')
+      }
+    } catch (err) {
+      console.error(JSON.stringify(err, null, 2))
+      return false
+    }
+  }
+
 
   return (
     <SafeAreaView className="bg-white h-full">
@@ -39,21 +57,21 @@ export default function Index() {
 
         <View className="px-10">
           <Text className="text-base text-center uppercase font-rubik text-black-200">
-            Welcome To Real Scout
+            Welcome To Estate Sphere
           </Text>
 
-          <Text className="text-3xl font-rubik-bold text-black-300 text-center mt-2">
+          <Text className="text-2xl font-rubik-bold text-black-300 text-center mt-2">
             Let's Get You Closer To {"\n"}
             <Text className="text-primary-300">Your Ideal Home</Text>
           </Text>
 
-          <Text className="text-lg font-rubik text-black-200 text-center mt-8">
-            Login to Real Scout with Google
+          <Text className="text-lg font-rubik text-black-200 text-center mt-4">
+            Login to estate sphere with Google
           </Text>
 
           <TouchableOpacity
             onPress={Login}
-            className="bg-white shadow-md shadow-zinc-300 rounded-full w-full py-4 mt-5"
+            className="bg-white shadow-md shadow-black-400 rounded-full w-full py-4 mt-2"
           >
             <View className="flex flex-row items-center justify-center">
               <Image
@@ -66,6 +84,7 @@ export default function Index() {
               </Text>
             </View>
           </TouchableOpacity>
+          <Text className='text-center mt-4 text-sm font-rubik-light'>&#x22C6; Developed By Binary-Shade &#x22C6;</Text>
         </View>
       </View>
     </SafeAreaView>
