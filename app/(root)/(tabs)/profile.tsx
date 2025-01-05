@@ -70,7 +70,7 @@ const Profile = () => {
               source={{uri: user?.imageUrl}}
               className='w-44 h-44 rounded-full border border-black-100'
             />
-            <TouchableOpacity className='absolute bottom-20 right-14 bg-white rounded-full p-1'>
+            <TouchableOpacity className='absolute bottom-16 right-6 bg-white rounded-full p-1'>
               <AntDesign
                 name='star'
                 size={24}

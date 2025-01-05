@@ -35,80 +35,53 @@ import {
   export const databases = new Databases(client);
   export const storage = new Storage(client);
   
-
   
-  export async function getCurrentUser() {
-    try {
-      const result = await account.get();
-      if (result.$id) {
-        const userAvatar = avatar.getInitials(result.name);
-  
-        return {
-          ...result,
-          avatar: userAvatar.toString(),
-        };
-      }
-  
-      return null;
-    } catch (error) {
-      console.log(error);
-      return null;
-    }
-  }
-  
-  export async function getLatestProperties() {
+  export const getLatestProperties = async () => {
     try {
       const result = await databases.listDocuments(
         config.databaseId!,
         config.propertiesCollectionId!,
         [Query.orderAsc("$createdAt"), Query.limit(5)]
-      );
-  
-      return result.documents;
+      )
+      return  result.documents
     } catch (error) {
       console.error(error);
       return [];
     }
   }
-  
-  export async function getProperties({
-    filter,
-    query,
-    limit,
-  }: {
-    filter: string;
-    query: string;
-    limit?: number;
-  }) {
+
+  export const getProperties = async ({filter, query, limit}: {
+    filter: string,
+    query: string, 
+    limit?: number
+  }) => {
     try {
-      const buildQuery = [Query.orderDesc("$createdAt")];
-  
-      if (filter && filter !== "All")
-        buildQuery.push(Query.equal("type", filter));
-  
-      if (query)
+      const buildQuery = [Query.orderDesc("$createdAt")]
+      if(filter && filter!== 'All'){
+        buildQuery.push(Query.equal('type', filter))
+      }
+      if(query && query.length > 0){
         buildQuery.push(
           Query.or([
-            Query.search("name", query),
-            Query.search("address", query),
-            Query.search("type", query),
+            Query.search('name', query),
+            Query.search('address', query),
+            Query.search('type', query)
           ])
-        );
-  
-      if (limit) buildQuery.push(Query.limit(limit));
-  
-      const result = await databases.listDocuments(
+        )
+      }
+      if(limit) buildQuery.push(Query.limit(limit))
+      const result = databases.listDocuments(
         config.databaseId!,
         config.propertiesCollectionId!,
         buildQuery
-      );
-  
-      return result.documents;
+      )
+      return (await result).documents
     } catch (error) {
       console.error(error);
       return [];
     }
   }
+
   
   // write function to get property by id
   export async function getPropertyById({ id }: { id: string }) {
