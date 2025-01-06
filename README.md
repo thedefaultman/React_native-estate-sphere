@@ -25,9 +25,11 @@ Welcome to **Binary-Shade**, a modern real estate app built with **React Native*
 
 ## screenshots
 
+![image](https://github.com/user-attachments/assets/51b60174-8963-4a6d-a5d0-c41d5b4a4614)
 
-![Screenshot_1736159788](https://github.com/user-attachments/assets/8ac08587-aeec-4e69-bc74-e2a5687e694e)
-![Screenshot_1736159791](https://github.com/user-attachments/assets/ccafd7fd-8403-4acb-9981-8ac5b2959863) ![Screenshot_1736159797](https://github.com/user-attachments/assets/e758fc7d-d0fa-40c8-90d6-addaaba78d17)
+![image](https://github.com/user-attachments/assets/66ceab23-aab5-45cb-9da0-5de97ff99204)
+
+![image](https://github.com/user-attachments/assets/8ee14778-fab9-44ef-9131-fc4c71755e42)
 
 Follow these steps to set up the app on your local machine:
 ### Prerequisites
