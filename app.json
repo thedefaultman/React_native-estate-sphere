@@ -15,7 +15,8 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "package": "com.shade437.restate"
     },
     "web": {
       "bundler": "metro",
@@ -34,7 +35,8 @@
         }
       ],
       [
-        "expo-font",{
+        "expo-font",
+        {
           "fonts": [
             "./assets/fonts/Rubik-Bold.ttf",
             "./assets/fonts/Rubik-ExtraBold.ttf",
@@ -42,12 +44,21 @@
             "./assets/fonts/Rubik-Medium.ttf",
             "./assets/fonts/Rubik-Regular.ttf",
             "./assets/fonts/Rubik-SemiBold.ttf"
-        ]
+          ]
         }
       ]
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "b4ec75ce-6361-4ec9-8b80-252737f71d69"
+      }
+    },
+    "owner": "shade437"
   }
 }

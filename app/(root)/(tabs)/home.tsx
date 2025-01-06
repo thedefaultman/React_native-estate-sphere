@@ -5,7 +5,7 @@ import Entypo from '@expo/vector-icons/Entypo';
 import Search from "@/components/Search";
 import  FeaturedCards, { Card }  from "@/components/Cards";
 import Filters from "@/components/Filters";
-import { useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useAppwrite } from "@/lib/useAppwrite";
 import { getLatestProperties, getProperties } from "@/lib/appwrite";
 import { useEffect } from "react";
@@ -26,9 +26,8 @@ export default function Home() {
   skip: true
 })
 
-  const onCardPress = () =>{
-    console.log("pressed");
-    
+  const onCardPress = (id: string) =>{
+    router.push(`/properties/${id}`)
   }
 
   useEffect(()=>{
@@ -48,7 +47,7 @@ export default function Home() {
         data={properties}
         numColumns={2}
         renderItem={({ item }) => (
-          <Card item={item} onPress={onCardPress} />
+          <Card item={item} onPress={() => onCardPress(item.$id)} />
         )}
         keyExtractor={(item, index) => item.$id || index.toString()}
         ListEmptyComponent={
@@ -105,7 +104,7 @@ export default function Home() {
               <FlatList
                   data={LatestProperties}
                   renderItem={({ item }) => (
-                    <FeaturedCards item={item} onPress={onCardPress}
+                    <FeaturedCards item={item} onPress={()=>onCardPress(item.$id)}
                     />
                   )}
                   keyExtractor={(item, index) => item.$id || index.toString()}
