@@ -1,0 +1,258 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v3
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Setup Expo CLI (if needed)
+      run: |
+        if [ -f "app.json" ] || [ -f "app.config.js" ]; then
+          echo "Expo project detected, installing Expo CLI"
+          npm install -g @expo/cli
+          # Ensure the global bin directory is in PATH
+          echo "$(npm config get prefix)/bin" >> $GITHUB_PATH
+        fi
+
+    - name: Generate native code (Expo prebuild)
+      run: |
+        if [ -f "app.json" ] || [ -f "app.config.js" ]; then
+          echo "Running Expo prebuild to generate native Android code"
+          if [ ! -d "android" ]; then
+            echo "Android directory not found, running prebuild..."
+            
+            # Detect Expo SDK version from multiple sources
+            SDK_VERSION=""
+            if [ -f "app.json" ]; then
+              SDK_VERSION=$(cat app.json | jq -r '.expo.sdkVersion // empty')
+            fi
+            
+            if [ -z "$SDK_VERSION" ] || [ "$SDK_VERSION" = "null" ]; then
+              # Try to detect from react-native version in package.json
+              RN_VERSION=$(cat package.json | jq -r '.dependencies["react-native"] // empty' 2>/dev/null || echo "")
+              if [[ "$RN_VERSION" =~ sdk-([0-9]+) ]]; then
+                SDK_VERSION="${BASH_REMATCH[1]}"
+                echo "Detected SDK version from react-native dependency: SDK $SDK_VERSION"
+              else
+                # Check if expo package exists and get its version
+                EXPO_VERSION=$(cat package.json | jq -r '.dependencies.expo // empty' 2>/dev/null || echo "")
+                if [ ! -z "$EXPO_VERSION" ] && [ "$EXPO_VERSION" != "null" ]; then
+                  # Extract major version from expo package (e.g., "~42.0.0" -> "42")
+                  if [[ "$EXPO_VERSION" =~ ([0-9]+). ]]; then
+                    SDK_VERSION="${BASH_REMATCH[1]}"
+                    echo "Detected SDK version from expo package: SDK $SDK_VERSION"
+                  fi
+                fi
+              fi
+            else
+              echo "Detected Expo SDK version from app.json: $SDK_VERSION"
+            fi
+            
+            # Determine if we need compatibility mode for older SDKs
+            if [ ! -z "$SDK_VERSION" ] && [ "$SDK_VERSION" != "null" ]; then
+              SDK_MAJOR=$(echo $SDK_VERSION | cut -d. -f1)
+              if [ "$SDK_MAJOR" -lt "47" ]; then
+                echo "Old SDK detected (SDK $SDK_MAJOR), using compatibility mode..."
+                COMPAT_MODE=true
+              else
+                echo "Recent SDK detected (SDK $SDK_MAJOR), standard dependencies should work"
+                COMPAT_MODE=false
+              fi
+            else
+              echo "Could not detect SDK version, defaulting to compatibility mode for safety"
+              COMPAT_MODE=true
+            fi
+            
+            # Install appropriate expo version based on SDK
+            if [ "$COMPAT_MODE" = "true" ]; then
+              echo "Installing expo package and gradle plugin for old SDK..."
+              # Install the specific gradle plugin version needed for older SDKs
+              npm install @react-native/gradle-plugin@0.0.71 --save-dev || npm install @react-native/gradle-plugin@latest --save-dev
+              # Don't upgrade expo for old SDKs, use existing version
+              npm install
+            else
+              echo "Installing/updating expo package (required for prebuild)..."
+              npm install expo@latest
+            fi
+            
+            # Also install expo-modules-autolinking explicitly if needed
+            if ! npm list expo-modules-autolinking > /dev/null 2>&1; then
+              echo "Installing expo-modules-autolinking..."
+              npm install expo-modules-autolinking@latest
+            fi
+            
+            # Use CI=1 instead of --non-interactive (as recommended by Expo CLI)
+            echo "Running prebuild with CI=1..."
+            CI=1 npx --yes @expo/cli@latest prebuild --platform android --no-install
+            
+            # Verify prebuild worked
+            if [ ! -d "android" ]; then
+              echo "Error: Prebuild failed to create android directory"
+              echo "Attempting with basic prebuild command..."
+              CI=1 npx --yes @expo/cli@latest prebuild --no-install
+            fi
+            
+            # Final verification
+            if [ ! -d "android" ]; then
+              echo "Error: Prebuild failed to create android directory after all attempts"
+              exit 1
+            fi
+            echo "Prebuild completed successfully"
+            
+            # Install/update dependencies after prebuild (required for Gradle)
+            echo "Installing dependencies after prebuild..."
+            npm install
+            
+            # SDK-specific compatibility fixes
+            if [ "$COMPAT_MODE" = "true" ]; then
+              echo "Applying compatibility fixes for SDK $SDK_VERSION..."
+              
+              # Install missing React Native gradle plugin (required for older Expo SDKs)
+              echo "Installing React Native gradle plugin..."
+              npm install @react-native/gradle-plugin@latest --save-dev
+              
+              # Also ensure react-native-gradle-plugin is available
+              npm install react-native-gradle-plugin@latest --save-dev || true
+              
+              # For SDK < 45, we might need additional packages
+              if [ "$SDK_MAJOR" -lt "45" ]; then
+                echo "Installing additional compatibility packages for SDK < 45..."
+                npm install @react-native-community/cli-platform-android@latest --save-dev || true
+              fi
+            else
+              echo "Recent SDK detected, standard dependencies should work"
+            fi
+          else
+            echo "Android folder already exists, skipping prebuild"
+          fi
+        else
+          echo "Regular React Native project, native code should already exist"
+          if [ ! -d "android" ]; then
+            echo "Error: Neither Expo project nor React Native project with android folder found"
+            exit 1
+          fi
+        fi
+
+    - name: Cache Gradle packages
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle-
+
+    - name: Make Gradlew executable
+      run: cd android && chmod +x ./gradlew
+
+    - name: Build Android APK
+      run: |
+        cd android
+        
+        # Debug: Check Node.js and environment
+        echo "Node.js version: $(node --version)"
+        echo "NPM version: $(npm --version)"
+        echo "Checking package.json..."
+        ls -la ../package.json
+        
+        # Debug: Check what's in settings.gradle that's causing the issue
+        echo "Checking settings.gradle line 3..."
+        head -5 settings.gradle
+        
+        # Debug: Check if React Native CLI is available
+        echo "Checking React Native CLI..."
+        npx react-native --version || echo "React Native CLI not available"
+        
+        # Debug: Check if gradle plugin is available
+        echo "Checking for @react-native/gradle-plugin..."
+        npm list @react-native/gradle-plugin || echo "Gradle plugin not found"
+        
+        # Create basic metro.config.js if it doesn't exist
+        if [ ! -f "../metro.config.js" ]; then
+          echo "Creating metro.config.js..."
+          echo "const { getDefaultConfig } = require('expo/metro-config');" > ../metro.config.js
+          echo "const config = getDefaultConfig(__dirname);" >> ../metro.config.js
+          echo "module.exports = config;" >> ../metro.config.js
+        fi
+        
+        # Clean any existing build artifacts
+        ./gradlew clean
+        
+        # Try to run the Node command manually to see what fails
+        echo "Testing Node.js command that's failing..."
+        node -e "console.log('Node.js is working')" || echo "Node.js basic test failed"
+        
+        # Build release APK with more verbose output
+        ./gradlew assembleRelease --stacktrace --info
+
+
+
+    - name: Upload Android APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: android-apk
+        path: android/app/build/outputs/apk/release/*.apk
+        retention-days: 30
+
+
+    - name: Upload artifacts to S3
+      if: always()
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        AWS_DEFAULT_REGION: us-east-2
+      run: |
+        # Upload React Native builds and record usage
+        if [ -d android/app/build/outputs/apk/release ]; then
+          for apk in android/app/build/outputs/apk/release/*.apk; do
+            if [ -f "$apk" ]; then
+              FILE_SIZE=$(stat -c%s "$apk")
+              FILENAME=$(basename "$apk")
+              aws s3 cp "$apk" s3://mobile-latch/artifacts/${{ github.run_id }}/android/$FILENAME
+              curl -X POST "${{ secrets.BACKEND_URL }}/api/storage-usage/record-from-workflow" \
+                -H "Content-Type: application/json" \
+                -H "x-github-run-id: ${{ github.run_id }}" \
+                -H "x-github-repo: ${{ github.repository }}" \
+                -d "{\"provider\": \"s3\", \"bucket\": \"mobile-latch\", \"path\": \"artifacts/${{ github.run_id }}/android/$FILENAME\", \"size\": $FILE_SIZE, \"artifactType\": \"apk\"}"
+            fi
+          done
+        fi
+        if [ -d ios/build ]; then
+          tar -czf ios-build.tar.gz -C ios/build .
+          FILE_SIZE=$(stat -c%s ios-build.tar.gz)
+          aws s3 cp ios-build.tar.gz s3://mobile-latch/artifacts/${{ github.run_id }}/ios/ios-build.tar.gz
+          curl -X POST "${{ secrets.BACKEND_URL }}/api/storage-usage/record-from-workflow" \
+            -H "Content-Type: application/json" \
+            -H "x-github-run-id: ${{ github.run_id }}" \
+            -H "x-github-repo: ${{ github.repository }}" \
+            -d "{\"provider\": \"s3\", \"bucket\": \"mobile-latch\", \"path\": \"artifacts/${{ github.run_id }}/ios/ios-build.tar.gz\", \"size\": $FILE_SIZE, \"artifactType\": \"ipa\"}"
+        fi
+        echo "Artifacts uploaded to s3://mobile-latch/artifacts/${{ github.run_id }}/"
