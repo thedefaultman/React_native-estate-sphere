@@ -1,0 +1,38 @@
+name: Simple Test Workflow
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:  # Allows manual triggering
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Print a message
+      run: echo "Hello from GitHub Actions!"
+    
+    - name: Show current directory
+      run: pwd
+    
+    - name: List files
+      run: ls -la
+    
+    - name: Print environment info
+      run: |
+        echo "Runner OS: $RUNNER_OS"
+        echo "GitHub Repository: $GITHUB_REPOSITORY"
+        echo "GitHub Actor: $GITHUB_ACTOR"
+        echo "GitHub Event: $GITHUB_EVENT_NAME"
+    
+    - name: Run a simple test
+      run: |
+        echo "Running tests..."
+        # Add your test commands here
+        echo "Tests passed! ✅"
